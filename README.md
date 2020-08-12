@@ -165,3 +165,33 @@ Indexing a tibble to identify moderate to strong correlations:
   - Negative values indicate a relationship where one variable decreases as another increases.
   - Values above 0.25 or below -0.25 are enough to qualify a correlation as potentially interesting and worthy of further investigation.
   - Values above 0.75 or below -0.75 indicate strong relationships.
+
+
+## Dealing With Missing Data
+
+**OMITTING MISSING VALUES FROM A CALCULATION**
+Calculate the mean of a vector without including its missing values:
+
+`mean(avg_sat_score, na.rm = TRUE)`
+
+Exclude from analysis any observation for which a specific variable has a missing value:
+
+`summary <- combined %>%
+  drop_na(boro)`
+
+Exclude from analysis any observation for which any variable has a missing value:
+
+`summary <- combined %>%
+  drop_na()`
+
+**QUANTIFYING MISSING VALUES FOR AN ENTIRE DATAFRAME**
+Calculate the number of missing values for each variable in a dataframe:
+
+`colSums(is.na(data_frame))`
+
+**IMPUTING TO REPLACE MISSING VALUES OF A VARIABLE**
+Impute to replace missing values of a variable with a new value:
+
+`new_variable = replace_na(old_variable, 0))`
+
+
