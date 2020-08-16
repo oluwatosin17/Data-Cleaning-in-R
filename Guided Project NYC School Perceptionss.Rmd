@@ -1,0 +1,242 @@
+---
+title: "Guided Project: Exploring NYC Schools Survey Data"
+author: "Tosin Obalana"
+output: html_notebook
+---
+
+In this project, I will analyze data from the New York City school department to understand whether parent, teacher and student perceptions of the following factors affect average school SAT scores(an indicator of academic performance):
+
+1. Safety
+2. Engagement
+3. Communication
+4. Academics
+
+I'll start by installing the packages needed for this analysis
+
+```{r}
+library(readr)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(tidyr)
+library(ggplot2)
+library(readxl)
+```
+
+In this project, we'll be investigating the following questions:\
+1. Do student, teacher, and parent perceptions of NYC school quality appear to be related to demographic and academic success metrics?
+2. Do students, teachers, and parents have similar perceptions of NYC school quality?
+
+
+Importing Data
+
+```{r}
+survey_dict <- read_xls("Survey Data Dictionary.xls")
+survey_dict
+```
+Survey Data Dictionary.xls, contains metadata that will be useful to decide how to clean and prepare the survey data for analysis.
+
+```{r}
+survey_data_gen <- read_tsv("masterfile11_gened_final.txt")
+survey_data_gen
+```
+
+The masterfile11_gened_final.txt file, contain survey data for "general education" schools — those that do not specifically serve populations with special needs.
+
+```{r}
+survey_data_dis <- read_tsv("masterfile11_d75_final.txt")
+survey_data_dis
+```
+
+The masterfile11_d75_final.txt file contain survey data for District 75 schools, which provide special education support for children with special needs such as learning or physical disabilities.
+
+```{r}
+combined <- read_csv("combined.csv")
+combined
+```
+# Simplifying DataFrames
+```{r}
+survey_data_gen <- survey_data_gen %>% select(dbn,schoolname,schooltype,saf_p_11,com_p_11,eng_p_11,aca_p_11,saf_t_11,com_t_11,eng_t_11,aca_t_11,saf_s_11,com_s_11,	
+eng_s_11,aca_s_11,saf_tot_11,com_tot_11,eng_tot_11,aca_tot_11) %>% filter(schooltype == "High School")
+survey_data_gen
+```
+I'm simplifying dataframes to include only variables I'll need for the analysis, like 
+dbn 
+schoolname 
+schooltype 	
+Safety and Respect score based on parent responses
+Communication score based on parent responses
+Engagement score based on parent responses
+Academic expectations score based on parent responses
+Safety and Respect score based on teacher responses
+Communication score based on teacher responses
+Engagement score based on teacher responses
+Academic expectations score based on teacher responses
+Safety and Respect score based on student responses
+Communication score based on student responses
+Engagement score based on student responses
+Academic expectations score based on student responses
+Safety and Respect total score
+Communication total score
+Engagement total score
+Academic Expectations total score
+
+```{r}
+survey_data_dis <- survey_data_dis %>% select(dbn,schoolname,schooltype,saf_p_11,com_p_11,eng_p_11,aca_p_11,saf_t_11,com_t_11,eng_t_11,aca_t_11,saf_s_11,com_s_11,	
+eng_s_11,aca_s_11,saf_tot_11,com_tot_11,eng_tot_11,aca_tot_11) %>% filter(schooltype == "District 75 Special Education")
+survey_data_dis
+```
+# Creating a Single DataFrame for Analysis
+```{r}
+survey_data <- survey_data_gen %>% bind_rows(survey_data_dis)
+survey_data
+```
+Since bind_rows(), like other dplyr functions, is designed for manipulating dataframes, it can be used in situations where dataframes have different numbers of variable columns. Using bind_rows() here, the output dataframe will contain a column if that column appears in any of the input dataframes,I'm using bind_rows() to combine "survey_data_gen and survey_data_dis into a single dataframe
+
+```{r}
+survey_combined <- combined %>% left_join(survey_data, by = "dbn")
+survey_combined
+```
+
+What determined the type of join I use?
+
+it makes sense to join the survey data to combined using left_join(), which will retain only observations in the survey_combined dataframe that correspond to observations in combined.
+
+
+# Look for Interesting Correlations and Examine Relationships Using Scatter Plots
+
+Finding the correlation coefficient showing the parent, teacher and student perceptions of the following factors and how they affect average school SAT scores(an indicator of academic performance):
+
+1. Safety
+2. Engagement
+3. Communication
+4. Academics
+
+```{r}
+colSums(is.na(survey_combined))
+```
+How do I handle missing values?
+
+Using use = "pairwise.complete.obs" , when this is used we discard the entire row if an NA  is present, and use the non-NA values when calculating correlation 
+
+
+```{r}
+survey_mat <- survey_combined %>% select(avg_sat_score,saf_p_11:aca_tot_11) %>% cor(use = "pairwise.complete.obs")
+survey_tib <- survey_mat %>% as_tibble(rownames = "variable")
+cor_s <- survey_tib %>% select(variable,avg_sat_score) %>% filter(avg_sat_score >0.25 | avg_sat_score< - 0.25)
+cor_s
+```
+
+I created a correlation matrix to look for interesting relationship between the pair of variables in the new combined dataframe 
+
+"The closer correlation coefficient is to zero the weaker the relationship", with this I can say that there is a weak positive relationship between saf_t_11, saf_s_11, aca_s_11, saf_tot_11 and avg_sat_score 
+
+
+```{r}
+create_scatter <- function(x,y){
+  ggplot(data = survey_combined, aes_string(x = x , y = y))+geom_point()
+}
+
+y = names(survey_combined)[7]
+x = c("saf_t_11","saf_s_11", "aca_s_11", "saf_tot_11")
+
+comparison <- map2(x,y,create_scatter)
+comparison
+```
+"You can tell a relationship is positive if values of variable 1 increase so do values of variable 2" 
+The points are spread out indicating a weak positive relationship. I can point out that safety and respect score and the avg_sat_score contribute to each other but the connection is weak. The more safe the environment the more comfortable the student,parent, teacher feel
+
+
+# Differences in Student, Parent and Teacher Percep tions
+
+Using the function pivot_longer to reshape the dataframe
+
+```{r}
+survey_combined_r <- survey_combined %>% pivot_longer(cols = c(saf_p_11:aca_tot_11 ), names_to = "survey_question", values_to = "score")
+
+survey_combined_r
+
+```
+Creating a new variable to extract information from the values of the survey question
+
+```{r}
+survey_combined_r <- survey_combined_r %>% mutate(response_type = str_sub(survey_question, 4,6))
+survey_combined_r <- survey_combined_r %>% mutate(metric = str_sub(survey_question,1,3))
+```
+
+We can use if_else() to assign more intuitive value names to the variables
+
+```{r}
+combined_survey_gather <- survey_combined_r %>% mutate(response_type = ifelse(response_type == "_p_","parent",  ifelse(response_type == "_t_","teacher",ifelse(response_type == "_s_","student",ifelse(response_type == "_to","total","NA")))))
+combined_survey_gather
+```
+for the metrics
+
+```{r}
+combined_survey_gather <- combined_survey_gather %>% mutate(metric = ifelse(metric =="saf", "safety and respect", ifelse(metric == "com","communication",ifelse(metric == "eng","engagement",ifelse(metric == "aca","academic expectation","NA")))))
+combined_survey_gather
+```
+creating a summary summaryusing the NYC quality metrics
+
+´
+```{r}
+summary <- combined_survey_gather %>% filter(response_type != "total") 
+ ggplot(data = summary, aes(x = metric , y = score , color = response_type))+geom_boxplot()+theme(
+
+panel.background = element_rect(fill = "white"))
+```
+1. Comparing the median; Looking at the plot the parent's perception to the survey questions were higher than the student's and teacher's response, same as n the communication and engagement perceptions  , The parent feel a lot more optimistic about how safe the schools are than the students and teachers. Also I noticed that the student perceptions were lower on all survey responses
+
+Teachers and Student academic perceptions were lower but not too far from the parent's academic perceptions
+
+2. Comparison of dispersion;  "The longer the box the more dispersed the data. The smaller the less dispersed the data.  As we can see the teacher box plot is much more dispersed than both the student and parent plot, the teachers perceptions were not in agreement with the parents and students responses. 
+ 
+3. Comparison of Outliners; The parent had relatively high value to the response to the survey while the teachers had a low value 
+
+
+```{r}
+
+survey_mat_gen <- survey_combined %>% select(male_per:female_per, sat_critical_reading_avg_score: avg_sat_score) %>% cor(use = "pairwise.complete.obs")
+survey_tib_gen <- survey_mat_gen %>% as_tibble(rownames = "variable")
+cor_s_gen <- survey_tib_gen %>% select(variable,male_per:female_per) 
+cor_s_gen
+```
+Is there any relationship between gender percentage and average SAT score?
+There's almost no correlation between the gender percentage and average SAT score
+
+```{r}
+combined_survey_gather
+school_metrics <- combined_survey_gather %>% filter(response_type != "total") %>% drop_na(score) %>% select(school_name,response_type,score) %>% group_by(school_name) %>% summarise( mean = mean(score))
+school_metrics  %>% arrange(-mean)
+```
+These are the school with the best quality metrics
+URBAN ACADEMY LABORATORY HIGH SCHOOL	
+CROTONA ACADEMY HIGH SCHOOL
+HIGH SCHOOL X560 s BRONX ACADEMY HIGH SCHOOL	
+BROWNSVILLE ACADEMY HIGH SCHOOL	
+VOYAGES PREPARATORY	
+THE CINEMA SCHOOL
+
+if I break it down by response type 
+
+```{r}
+combined_survey_gather
+school_metrics <- combined_survey_gather %>% filter(response_type != "total") %>% drop_na(score) %>% select(school_name,response_type,score) %>% group_by(response_type) %>% summarise( mean = mean(score))
+school_metrics  %>% arrange(-mean)
+```
+
+if broken down by response type , the parents has the best quality metrics, followed by the teacher and student
+
+```{r}
+survey_diff <- survey_combined %>% mutate(diff_saf = saf_s_11 - saf_p_11)
+survey_diff
+```
+
+```{r}
+survey_mat_diff <- survey_diff %>% select_if(is.numeric) %>% select(!contains("_11")) %>% cor(use = "pairwise.complete.obs")
+survey_tib_diff <- survey_mat_diff %>% as_tibble(rownames = "variable")
+cor_s_diff <- survey_tib_diff %>% select(variable,diff_saf) %>% filter(diff_saf>0.25 | diff_saf < - 0.25)
+cor_s_diff
+```
+ One noticeable thing is that there is a negative correlation between black_per and diff_saf . This means that black population feels less safe  also there's a negative correlation between the sped_percent and diff_saf  the student participating in special education also feel less safe , due to so many reasons
+
